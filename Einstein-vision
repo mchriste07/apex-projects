@@ -1,0 +1,18 @@
+public class EinsteinVisionAction {
+    public static FSLEVflow__c setting;
+    
+    @future(Callout=true)
+    public static void classifyFiles(Id contentDocumentId,Id WorkOrderId) {
+        setting = FSLEVflow__c.getInstance('Standard');
+        String access_token = new VisionController().getAccessToken();        
+        ContentVersion content = [SELECT Title,VersionData,ContentDocumentId FROM ContentVersion where ContentDocumentId = :contentDocumentId];
+        WorkOrder wo = [SELECT Einstein_Vision_Prediction_Label__c,Id,Einstein_Vision_Prediction_Probability__c,LastModifiedById  FROM WorkOrder where Id = :WorkOrderId];
+        for(Vision.Prediction vp : Vision.predictBlob(content.VersionData, access_token, 'GeneralImageClassifier')) {
+            wo.Einstein_Vision_Prediction_Label__c = vp.label;
+            wo.Einstein_Vision_Prediction_Probability__c = vp.probability;
+            //wo.LastModifiedById = setting.userid__c;
+            update wo;
+            break; // Just take the most probable
+        }
+    }  
+}
