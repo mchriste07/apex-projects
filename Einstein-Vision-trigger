@@ -1,0 +1,13 @@
+trigger trigger_Einstein_Vision_CDL on ContentDocumentLink (after insert) {
+    
+    if(trigger.isAfter && trigger.isInsert){
+        ContentDocumentLink []newContentDocumentLink = Trigger.new;
+        for(ContentDocumentLink c: trigger.new){
+            String wid = String.valueof(c.LinkedEntityId);
+            Boolean result = wid.startsWith('0WO');   
+            if(result==true){    
+            EinsteinVisionAction.classifyFiles(c.ContentDocumentId, c.LinkedEntityId);
+            }
+    }
+  }
+}
