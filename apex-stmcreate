@@ -1,0 +1,139 @@
+public class blogic_SecondarySTM_Create1 {
+
+//***************creating service territory membership record
+     public static void InsertAfter(AssignedResource[] newAssignedResource){
+         
+         /* if there is a secondary allocation territory associated with the SA, then this method will create a secondary STM for the 
+          * resource for the secondary allocation.  It will take the datetime of the SA and expand it 
+          * to be from Midnight to 11:59PM and use that for the secondary STM effective start and end dates */
+     
+            List<Id> ares = new List<Id>();
+            List<AssignedResource> ARList = new List<AssignedResource>();
+            List<ServiceTerritoryMember> ServiceTerritoryMemberList = new List<ServiceTerritoryMember>(); 
+            List<ServiceTerritoryMember> ExistingSTMList = new List<ServiceTerritoryMember>();
+            for (AssignedResource ar : newAssignedResource) {
+                        ares.add(ar.Id);               
+            }
+
+            map<string,id> rtdmap = new map<string,id>();
+            set<id> resourceidset = new set<id>();
+            set<id> territoryidset = new set<id>();
+            ARList = [SELECT ServiceResourceId, ServiceAppointmentId, ServiceAppointment.SchedStartTime, EstimatedTravelTime, FSL__EstimatedTravelTimeFrom__c, ServiceAppointment.SchedEndTime, ServiceAppointment.Secondary_Allocation__c FROM AssignedResource WHERE Id IN: ares];          
+                   
+            /* this for loop populates the resource id and territory id sets so we can use them in the next select statement */
+            for(AssignedResource areso : ARList) {
+                       resourceidset.add(areso.ServiceResourceId);
+                       territoryidset.add(areso.ServiceAppointment.Secondary_Allocation__c);
+            }
+            /* populate ExistingSTMList with all of the secondary STM records for the Resources and the Secondary Territories */
+            ExistingSTMList = [select id, ServiceTerritoryID,ServiceResourceID,EffectiveStartDate,EffectiveEndDate,TerritoryType
+                              from ServiceTerritoryMember where ServiceTerritoryID in :territoryidset and ServiceResourceID in :resourceidset
+                              and TerritoryType = 'S'];
+         /* this for loop populates a map of STM for a resource, territority and date and the STM id */
+         for (ServiceTerritoryMember thisSTM : ExistingSTMList){
+             resourceterritorydate myrtd = new resourceterritorydate();
+             myrtd.resourceid = thisSTM.ServiceResourceid;
+             myrtd.territoryid = thisSTM.ServiceTerritoryId;
+             myrtd.startdate = getDayStart(thisSTM.EffectiveStartDate);
+             rtdmap.put(getrtdkey(myrtd),thisSTM.Id);
+         }
+         /* loop through each AR you're adding and double check if there is already a secondary STM record */
+            for(AssignedResource areso : ARList) {
+                resourceterritorydate myrtd = new resourceterritorydate();
+                 myrtd.resourceid = areso.ServiceResourceId;
+                 myrtd.territoryid = areso.ServiceAppointment.Secondary_Allocation__c;
+                 myrtd.startdate = getDayStart(areso.ServiceAppointment.SchedStartTime);
+                /* if there is no secondary STM then add the new secondary STM to the list of new ones */
+                if(!rtdmap.containsKey(getrtdkey(myrtd))) {
+                       ServiceTerritoryMemberList.add (new ServiceTerritoryMember (
+                       ServiceTerritoryId=areso.ServiceAppointment.Secondary_Allocation__c, 
+                       ServiceResourceId = areso.ServiceResourceId,
+                       EffectiveStartDate = getDayStart(areso.ServiceAppointment.SchedStartTime), 
+                       EffectiveEndDate = getDayEnd(areso.ServiceAppointment.SchedEndTime),
+                       Related_Service_Appointment__c = areso.ServiceAppointmentId,
+                       TerritoryType = 'S'  
+                       )); }
+                }
+         if(ServiceTerritoryMemberList.size()>0) {
+             insert ServiceTerritoryMemberList;
+             // add any new stm's to the rtdmap which we'll use to build the SSTMJunction object
+             for (ServiceTerritoryMember thisSTM : ServiceTerritoryMemberList){
+             resourceterritorydate myrtd = new resourceterritorydate();
+             myrtd.resourceid = thisSTM.ServiceResourceid;
+             myrtd.territoryid = thisSTM.ServiceTerritoryId;
+             myrtd.startdate = getDayStart(thisSTM.EffectiveStartDate);
+             rtdmap.put(getrtdkey(myrtd),thisSTM.Id);                 
+             }
+         }
+         list<SSTMJunction__c> SSTMJunctionList = new list<SSTMJunction__c>();
+         // loop through all of the ARs and for each one create a SSTMJunction record 
+         for (AssignedResource thisAR : ARList) {
+             resourceterritorydate myrtd = new resourceterritorydate();
+             myrtd.resourceid = thisAR.ServiceResourceid;
+             myrtd.territoryid = thisAR.serviceappointment.secondary_allocation__c;
+             myrtd.startdate = getDayStart(thisAR.serviceappointment.schedstarttime);
+             
+             SSTMJunction__c SSTMJ = new SSTMJunction__c();
+             SSTMJ.STM_ID__c = rtdmap.get(getrtdkey(myrtd));  
+             SSTMJ.Service_Appointment_ID__c = thisAR.serviceappointmentid;
+             SSTMJ.Name = SSTMJ.STM_ID__c + SSTMJ.Service_Appointment_ID__c;
+             SSTMJunctionList.add(SSTMJ);
+         } 
+         if(SSTMJunctionList.size()>0) insert SSTMJunctionList;
+     }
+             
+     public static void DeleteAR(AssignedResource[] newAssignedResource){
+   
+         /* this method will delete the secondary STM, if its the last SA for the secondary STM.
+          * for each AR record, it will check if there are other SAs assigned to the same resource for the same
+          * territory and the same date.  If there are, it won't delete. */
+            List<string> sa = new List<string>();
+            List<Id> ares = new List<Id>();
+            Set<String> STMIdSet = new set<String>();
+            Set<Id> STMKeepSet = new set<id>();
+            List<SSTMJunction__c> delSSTMJList = new list<SSTMJunction__c>();
+            List<AssignedResource> ARList = new List<AssignedResource>();
+            List<ServiceTerritoryMember> ServiceTerritoryMemberList = new List<ServiceTerritoryMember>(); 
+            List<ServiceTerritoryMember> delSTMList = new List<ServiceTerritoryMember>();
+            for (AssignedResource ar : newAssignedResource) {
+                        sa.add(ar.ServiceAppointmentId); 
+                        ares.add(ar.Id);                 
+            } 
+            for (SSTMJunction__c thisSSTMJ : [select STM_ID__c, id, Service_Appointment_ID__c from SSTMJunction__c where
+                                            Service_Appointment_ID__c in :sa]) {
+                STMIdSet.add(thisSSTMJ.STM_Id__c);
+                delSSTMJList.add(thisSSTMJ);
+            }
+            ServiceTerritoryMemberList = [Select ID, ServiceResourceId, ServiceTerritoryId from ServiceTerritoryMember where id in :STMIdSet];
+            for (SSTMJunction__c thisSSTMJ : [select STM_ID__c, id, Service_Appointment_ID__c from SSTMJunction__c where
+                                              STM_ID__c in:STMIdSet and Service_Appointment_ID__c not in :sa]) {
+                STMKeepSet.add(thisSSTMJ.STM_ID__c);                                                                  
+            }     
+         if(delSSTMJList.size()>0) {delete delSSTMJList;}
+         for(ServiceTerritoryMember thisSTM : ServiceTerritoryMemberList){
+            if(STMKeepSet.size() == 0 || !STMKeepSet.contains(thisSTM.id)) {delSTMList.add(thisSTM);}
+         }
+         if(delSTMList.size()> 0) {delete delSTMList;}
+               
+    }
+
+    public static datetime getDayStart(datetime starttime) {
+        /* this method takes a datetime such as 2018-07-12T01:34:54.000Z and returns 2018-07-12T00:00:00.000Z */
+        return datetime.newinstance(starttime.year(),starttime.month(),starttime.day());
+    }
+    public static datetime getDayEnd (datetime starttime) {  
+        /* this method takes a datetime such as 2018-07-12T01:34:54.000Z and returns 2018-07-12T23:59:00.000Z */
+        return getDayStart(starttime).addminutes(1439);
+    }
+    public class resourceterritorydate {
+        public id resourceid;
+        public id territoryid;
+        public datetime startdate;
+    }
+    public static string getrtdkey (resourceterritorydate myrtd){
+        string r = Id.Valueof(myrtd.resourceid);
+        string t = Id.Valueof(myrtd.territoryid);
+        string sd = myrtd.startdate.format();
+        return r + t + sd ;
+    }
+}
