@@ -1,0 +1,57 @@
+trigger trigger_STMCreate on AssignedResource (after insert, after update, before delete) {
+
+    if(trigger.isinsert){
+
+        AssignedResource []newAssignedResource = Trigger.new;
+        list<AssignedResource> newARList = new list<AssignedResource>();
+            for(AssignedResource ar: trigger.new){
+            AssignedResource ares = [select ServiceAppointment.Secondary_Allocation__c from AssignedResource where Id IN : trigger.new];    
+            if(ares.ServiceAppointment.Secondary_Allocation__c != null){
+                    newARList.add(ar);
+            }
+                
+             if(newARList.size() > 0){
+//                blogic_SecondarySTM_Create.InsertAfter(newAssignedResource);
+                blogic_SecondarySTM_Create1.InsertAfter(newAssignedResource);
+           }   
+}   
+} 
+    if(trigger.isdelete){
+        
+        AssignedResource []newAssignedResource = Trigger.old;
+        list<AssignedResource> newARList = new list<AssignedResource>();
+            for(AssignedResource ar: trigger.old){}
+// edwin orginal           ServiceTerritoryMember sstm = [select Related_Service_Appointment__c from ServiceTerritoryMember where Related_Service_Appointment__c =: ar.ServiceAppointmentId]; 
+//            list<ServiceTerritoryMember> sstmlist = new list<ServiceTerritoryMember>();
+//            sstmlist = [select Related_Service_Appointment__c from ServiceTerritoryMember where Related_Service_Appointment__c =: ar.ServiceAppointmentId limit 1]; 
+//            ServiceTerritoryMember sstm = new ServiceTerritoryMember();
+//                if (sstmlist.size()> 0) {sstm = sstmlist[0];}
+//                System.debug(sstm);
+//                if(sstm.Related_Service_Appointment__c != null && sstm != null){
+//                        newARList.add(ar);
+//                }
+                    
+//                 if(newARList.size() > 0 && newARList != null){
+//                    blogic_SecondarySTM_Create.DeleteAR(newAssignedResource);
+                    blogic_SecondarySTM_Create1.DeleteAR(newAssignedResource);
+//               }      
+//            }
+    }
+    if(trigger.isupdate){
+        
+        AssignedResource []newAssignedResource = Trigger.new;
+//        list<AssignedResource> newARList = new list<AssignedResource>();
+//            for(AssignedResource ar: trigger.new){
+//            ServiceTerritoryMember sstm = [select Related_Service_Appointment__c from ServiceTerritoryMember where Related_Service_Appointment__c =: ar.ServiceAppointmentId]; 
+//                if(sstm.Related_Service_Appointment__c != null && sstm != null){
+//                        newARList.add(ar);
+//                }
+                    
+//                 if(newARList.size() > 0 && newARList != null){
+                    blogic_SecondarySTM_Create1.DeleteAR(newAssignedResource);
+//                    blogic_SecondarySTM_Create.InsertAfter(newAssignedResource); 
+                    blogic_SecondarySTM_Create1.InsertAfter(newAssignedResource); 
+//               }      
+//            }
+    }
+}
