@@ -1,0 +1,63 @@
+public class FSL_Schedule {
+	
+    @InvocableMethod(label='Advanced Schedule' description='Optimizes a single Service Appointment and inserted into schedule')
+    public static void scheduleSA(List<ScheduleParams> inputParams){
+        
+        for (ScheduleParams inputParam: inputParams)
+        {
+           FSL.ScheduleResult scheduleResult = FSL.ScheduleService.Schedule(inputParam.policyId, inputParam.ServiceAppointmentId);
+        }
+     }
+    public class ScheduleParams
+    {
+        @InvocableVariable(required=true)
+        public Id ServiceAppointmentId;
+        @InvocableVariable(required=true)
+        public Id policyId;
+    }
+}
+
+public class FSL_Reshuffle {
+	
+    @InvocableMethod(label='Reshuffle Service Appointment' description='Optimizes a single Service Appointment and inserted into schedule')
+    public static void reshuffleSA(List<ReshuffleParams> inputParams){
+        
+        for (ReshuffleParams inputParam: inputParams)
+        {
+            FSL.OAAS oreq = new FSL.OAAS();
+            id optReq = oreq.Reshuffle(inputParam.ServiceAppointmentId, inputParam.policyId);
+        }
+     }
+    public class ReshuffleParams
+    {
+        @InvocableVariable(required=true)
+        public Id ServiceAppointmentId;
+        @InvocableVariable(required=true)
+        public Id policyId;
+    }
+}
+
+public class FSL_RSO 
+{
+    @InvocableMethod(label='Resource Schedule Optimization' description='Optimizes a Service Resource Schedule')
+    public static void optimizeResource(List<RSORequest> inputParams){
+        
+        for (RSORequest inputParam: inputParams)
+        {
+            RSOHelper.optimizeSR(inputParam.dayshorizon, inputParam.resourceID, inputParam.policyID, inputParam.candidatefield, inputParam.requiredfield);
+        }
+    }
+public class RSORequest 
+    {
+        @InvocableVariable(required=true)
+        public Id resourceID;
+        @InvocableVariable(required=true)
+        public Id policyID;
+        @InvocableVariable(required=true)
+        public integer dayshorizon;
+        @InvocableVariable(required=true)
+        public string candidatefield;
+        @InvocableVariable(required=true)
+        public string requiredfield;
+    }
+}
